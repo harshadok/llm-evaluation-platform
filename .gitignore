@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+__pycache__/
+.venv/
+.dart_tool/
+build/
+.DS_Store
