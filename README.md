@@ -1,99 +1,89 @@
 # LLM Evaluation Platform
 
-**Status: Planning / documentation only.** This repository currently contains a project specification and implementation roadmap. No working application, provider integration, deployment, or measured results are included yet.
+Run repeatable evaluations over immutable dataset versions, score outputs, inspect traces, and detect quality/error/latency regressions.
 
-A personal learning project by [Harshad Odakkal](https://github.com/harshadok), building on professional Flutter and mobile engineering experience while transitioning toward AI/mobile engineering.
+**Implemented local portfolio application**, with source, persistent storage, runnable API, synthetic examples, automated tests, and a demo script. The interactive API at `/docs` is the included client. This repository does not claim a production deployment, a native mobile client, or previously measured customer usage.
 
-## Problem and goal
+## Features
 
-Compare prompt and model configurations against repeatable datasets and inspect quality regressions, latency, and cost.
+- Immutable, content-hashed datasets with monotonically increasing versions per name.
+- Real Ollama runs and explicitly labelled fixture runs.
+- Exact, substring, JSON Schema, and structured tool-call scorers.
+- Per-case output, latency, token usage when supplied, failure details, and traces.
+- Provider errors score zero and remain in aggregate denominators.
+- Same-dataset baseline comparisons with score-drop, error-count, and optional latency thresholds.
+- Persistent runs, JSON/CSV exports, and CSV formula escaping. Cost remains null when pricing is unknown.
 
-## Skills to practise
+## Install and run
 
-- LLM evaluation
-- Regression testing
-- Observability
-- AI quality assurance
-- Experiment comparison
+Use Python 3.9–3.12 (developed/tested here with 3.9.6; Python 3.11 is recommended for a new environment).
 
-## Planned end-to-end workflow
-
-1. Create a versioned dataset of prompts, reference answers, and scoring rules.
-2. Register a prompt and model configuration for an experiment.
-3. Run dataset cases and record outputs, errors, latency, and token usage where available.
-4. Score deterministic cases with explicit rules and optionally collect labelled model-judge scores.
-5. Compare candidate results with a saved baseline using explicit regression thresholds.
-6. Inspect traces and export a report for human review.
-
-## Proposed architecture
-
-Python evaluation runner and API; provider adapters; relational experiment store; structured trace events; Flutter results dashboard.
-
-The stack is a design proposal. Specific providers, libraries, model versions, and database products will be selected and documented during implementation.
-
-## Planned API surface
-
-- `POST /datasets` — register a versioned dataset
-- `POST /runs` — launch an evaluation run
-- `GET /runs/{id}` — inspect results and traces
-- `POST /comparisons` — compare a candidate against a baseline
-
-These endpoints are proposed contracts; they are not implemented.
-
-## Core data model
-
-Dataset(version, cases); Run(dataset_version, config, status); CaseResult(output, score, latency_ms, usage, error); Comparison(baseline, candidate, thresholds, regressions).
-
-## Flutter/mobile experience
-
-Run history, baseline selection, score comparison, failing-case inspection, and latency or usage summaries.
-
-## Evaluation and acceptance plan
-
-- [ ] Use fixed outputs to verify scorers and regression thresholds.
-- [ ] Record dataset and prompt versions so comparisons are traceable.
-- [ ] Test failed provider calls, missing usage fields, and partially completed runs.
-- [ ] Distinguish model-judge scores from deterministic checks and human review.
-- [ ] Verify aggregate scores include error cases and preserve case-level detail.
-
-No accuracy, latency, cost, or reliability results have been measured. Results will be added only after reproducible runs.
-
-## Implementation roadmap
-
-- [ ] **Milestone 1:** Define a small versioned dataset and deterministic scoring rules.
-- [ ] **Milestone 2:** Build a provider-independent run interface with recorded outputs and errors.
-- [ ] **Milestone 3:** Add experiment storage, traces, and baseline comparisons.
-- [ ] **Milestone 4:** Build the Flutter results dashboard and exportable reports.
-- [ ] **Milestone 5:** Use the platform to evaluate one other portfolio project and publish measured findings.
-
-## Planned demonstration
-
-Compare two prompt configurations on a small dataset and inspect an intentionally introduced regression alongside the underlying output and trace.
-
-## Data and operational boundaries
-
-Do not publish secrets or sensitive prompts in traces. Model-judge scores are estimates rather than ground truth, and quality claims require real recorded runs.
-
-## Getting started today
-
-1. Read the proposed workflow and choose the first milestone.
-2. Decide on providers and local development tools; record those decisions before implementation.
-3. Add application code and a reproducible setup guide as the first milestone is built.
-4. Use synthetic or public test data and keep credentials outside version control.
-
-**There is no runnable quick start yet.** Installation and run commands will be added when code exists.
-
-## Suggested future layout
-
-```text
-apps/mobile/        # Planned Flutter client
-services/api/       # Planned application API
-evals/              # Planned fixtures and evaluation runs
-docs/               # Architecture decisions and demonstration notes
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
 ```
 
-These directories describe the intended structure and have not been implemented.
+For AI operations, install [Ollama](https://ollama.com/download), start its local server, and pull a model:
 
-## Portfolio context
+```sh
+ollama serve
+# In a second terminal:
+ollama pull qwen2.5:1.5b
+export AI_MODEL=qwen2.5:1.5b
+./scripts/start.sh
+```
 
-This is an independent planned portfolio project, not client work or a production deployment. Its current scope is documentation; update the status and roadmap as working milestones are completed.
+Open [interactive API docs](http://127.0.0.1:8104/docs). The default service port is 8104; override with `PORT`. Keep one API worker bound to localhost. This single-user application has no authentication and stores development data in ignored `data/`; do not expose it as a multi-user public service.
+
+Configuration is read from environment variables. `.env.example` documents them but is not automatically executed or loaded. `OLLAMA_BASE_URL` defaults to `http://127.0.0.1:11434`; `AI_MODEL` selects the installed local model. Providers run on the backend computer; the initial model downloads need internet. No paid API credentials are required.
+
+`requirements.txt` contains portable version ranges; `requirements-lock.txt`, when present, records the exact versions installed in this macOS development environment.
+
+## Walkthrough
+
+1. `POST /datasets` with `examples/dataset.json`. Identical submissions return the same ID; changed content creates a new version.
+2. `POST /runs` with `{"dataset_id":"...","provider":"fixture"}` for a deterministic control, or `provider:"ollama"` for a real model.
+3. Configure optional `model`, `prompt` (literal `{input}` replacement), and `max_tokens` on a run.
+4. Inspect `/runs/{id}`, `/runs/{id}/traces`, and `/runs/{id}/export?format=json` or `csv`.
+5. `POST /comparisons` with `baseline_id`, `candidate_id`, optional `max_score_drop`, and optional `max_latency_increase_ms`.
+6. Compare only completed runs of the same immutable dataset version. A real model may fail a fixture baseline; that is a recorded quality regression, not an infrastructure success claim.
+
+With the API running, execute the synthetic walkthrough in another terminal:
+
+```sh
+source .venv/bin/activate
+python scripts/demo.py
+```
+
+Use `--url http://127.0.0.1:PORT` to target a different local port. `/docs` exposes the full request and response schemas for manual testing.
+
+## Tests
+
+```sh
+python -m pytest -q
+```
+
+The current automated suite has **4 passing tests** covering workflow behaviour and important failures. Tests inject provider doubles to remain deterministic; `VERIFICATION.md` separately records real-provider checks. Automated CI runs the deterministic suite without model credentials. The synthetic demo is not a production accuracy benchmark.
+
+## Observability and reproducibility
+
+Every case records start/completion/failure trace events, prompt input, output, scorer, latency, available token usage and errors. A run stores its dataset digest/version and model/prompt configuration. Comparison requires matching dataset digests, so changing the test set cannot silently improve a comparison.
+
+The three-case `examples/dataset.json` is a small synthetic smoke dataset. Use larger held-out datasets for meaningful quality conclusions. Dataset records are immutable; experiment outputs and traces are stored locally.
+
+Modules: `app/main.py` contains schemas, scorers, dataset versioning, run orchestration, comparisons, and export.
+
+## Operational boundaries
+
+- Up to 30 cases per dataset. Runs execute synchronously and save progress after every case; an interrupted process can leave a visible `running` run. There is no distributed queue or automatic resume.
+- Fixture results are control data, never labelled as model performance. Output-scorer semantics are deterministic and intentionally strict: Markdown fences fail a strict JSON output check.
+- JSON Schema references are disabled to prevent scoring from fetching external schemas. Tool-call scoring compares parsed name/arguments.
+- No model-judge or human-label scoring UI is included. Measured smoke results are not a general benchmark of a model's capabilities.
+- Token usage is null when not returned; cost is null because local inference has no configured pricing model. Do not interpret null as zero cost.
+
+## Technical references
+
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [Ollama API](https://github.com/ollama/ollama/blob/main/docs/api.md)

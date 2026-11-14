@@ -1,10 +1,12 @@
+.venv/
 .env
 .env.*
 !.env.example
+data/
+.tools/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
 *.pem
 *.key
-__pycache__/
-.venv/
-.dart_tool/
-build/
-.DS_Store
